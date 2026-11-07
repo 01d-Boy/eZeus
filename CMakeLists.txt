@@ -3450,6 +3450,15 @@ if(LINUX)
     target_link_libraries(eZeus PRIVATE ${NOISE_LIBRARY})
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # static builds only provide the "-static" targets, add the usual names
+    foreach(lib SDL2 SDL2_ttf SDL2_image SDL2_mixer)
+        if(NOT TARGET ${lib}::${lib} AND TARGET ${lib}-static)
+            add_library(${lib}::${lib} ALIAS ${lib}-static)
+        endif()
+    endforeach()
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND TARGET SDL2main)
     target_link_libraries(eZeus PRIVATE SDL2main)
 endif()
