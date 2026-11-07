@@ -3415,7 +3415,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # The game includes <SDL2/SDL_image.h> etc., but the in-tree SDL libraries
     # expose their headers without the SDL2/ prefix: generate forwarding headers.
     foreach(lib sdl2_ttf sdl2_image sdl2_mixer)
-        file(GLOB sdl_headers "${${lib}_SOURCE_DIR}/include/*.h")
+        file(GLOB sdl_headers "${${lib}_SOURCE_DIR}/include/SDL_*.h"
+                              "${${lib}_SOURCE_DIR}/SDL_ttf.h")
         foreach(h ${sdl_headers})
             get_filename_component(hname ${h} NAME)
             file(WRITE "${CMAKE_BINARY_DIR}/sdl_shim/SDL2/${hname}"
