@@ -3411,6 +3411,18 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "14.0"
     )
     target_compile_definitions(eZeus PRIVATE EZEUS_IOS=1)
+
+    # The game includes <SDL2/SDL_image.h> etc., but the in-tree SDL libraries
+    # expose their headers without the SDL2/ prefix: generate forwarding headers.
+    foreach(lib sdl2_ttf sdl2_image sdl2_mixer)
+        file(GLOB sdl_headers "${${lib}_SOURCE_DIR}/include/*.h")
+        foreach(h ${sdl_headers})
+            get_filename_component(hname ${h} NAME)
+            file(WRITE "${CMAKE_BINARY_DIR}/sdl_shim/SDL2/${hname}"
+                 "#include \"${h}\"\n")
+        endforeach()
+    endforeach()
+    target_include_directories(eZeus PRIVATE ${CMAKE_BINARY_DIR}/sdl_shim)
     target_link_libraries(eZeus PRIVATE
         "-framework UIKit"
         "-framework Foundation"
