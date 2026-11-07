@@ -3408,6 +3408,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
         XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "2"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.ezeus.ipad"
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "14.0"
     )
     target_compile_definitions(eZeus PRIVATE EZEUS_IOS=1)
@@ -3437,6 +3438,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         "-framework Metal"
         "-framework QuartzCore"
         "-framework OpenGLES"
+        "-framework ImageIO"
+        "-framework MobileCoreServices"
+        "-framework UniformTypeIdentifiers"
     )
 endif()
 
