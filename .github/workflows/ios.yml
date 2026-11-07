@@ -1,0 +1,55 @@
+name: Build iOS (iPad)
+
+on:
+  push:
+    branches: [ ios-port ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          cmake --version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=NO
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build --config Release -- \
+            -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            -jobs 4 2>&1 | tee build.log | grep -E "error:|warning: unused|\*\* BUILD|Ld |fatal error" || true
+          test -d build/Release-iphoneos/eZeus.app
+
+      - name: Package .ipa
+        run: |
+          mkdir -p ipa/Payload
+          cp -R build/Release-iphoneos/eZeus.app ipa/Payload/
+          (cd ipa && zip -qry ../eZeus-unsigned.ipa Payload)
+          ls -la eZeus-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eZeus-ipad-ipa
+          path: eZeus-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-log
+          path: build.log

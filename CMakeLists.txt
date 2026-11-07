@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(eZeus LANGUAGES CXX)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    project(eZeus LANGUAGES C CXX OBJCXX)
+else()
+    project(eZeus LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,11 +18,41 @@ endif()
 include(FetchContent)
 
 # Disable unnecessary SDL components (optional but recommended)
-set(SDL_SHARED ON CACHE BOOL "" FORCE)
-set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-set(SDL_TEST OFF CACHE BOOL "" FORCE)
-set(SDLIMAGE_AVIF OFF)
-set(SDLTTF_VENDORED ON CACHE BOOL "" FORCE)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # iOS: everything is linked statically into the app
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+    set(SDL2TTF_VENDORED ON CACHE BOOL "" FORCE)
+    set(SDL2TTF_HARFBUZZ OFF CACHE BOOL "" FORCE)
+    set(SDL2TTF_SAMPLES OFF CACHE BOOL "" FORCE)
+
+    set(SDL2IMAGE_VENDORED ON CACHE BOOL "" FORCE)
+    set(SDL2IMAGE_DEPS_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL2IMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL2IMAGE_AVIF OFF CACHE BOOL "" FORCE)
+    set(SDL2IMAGE_JXL OFF CACHE BOOL "" FORCE)
+    set(SDL2IMAGE_TIF OFF CACHE BOOL "" FORCE)
+    set(SDL2IMAGE_WEBP OFF CACHE BOOL "" FORCE)
+
+    set(SDL2MIXER_VENDORED ON CACHE BOOL "" FORCE)
+    set(SDL2MIXER_DEPS_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_FLAC OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_MOD OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_OPUS OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_GME OFF CACHE BOOL "" FORCE)
+    set(SDL2MIXER_WAVPACK OFF CACHE BOOL "" FORCE)
+else()
+    set(SDL_SHARED ON CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    set(SDLIMAGE_AVIF OFF)
+    set(SDLTTF_VENDORED ON CACHE BOOL "" FORCE)
+endif()
 if(MINGW)
     add_compile_options(-Wa,-mbig-obj)
 endif()
@@ -31,6 +65,12 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(SDL2)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT TARGET SDL2::SDL2)
+    if(TARGET SDL2-static)
+        add_library(SDL2::SDL2 ALIAS SDL2-static)
+    endif()
+endif()
 
 FetchContent_Declare(
     SDL2_ttf
@@ -3348,6 +3388,45 @@ target_include_directories(eZeus PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+target_sources(eZeus PRIVATE
+    etouchcontroller.cpp
+    etouchcontroller.h
+)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # libnoise replacement, platform helpers
+    target_sources(eZeus PRIVATE
+        ios/eiosplatform.mm
+        ios/eiosplatform.h
+    )
+    target_include_directories(eZeus PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/ios
+    )
+    set_target_properties(eZeus PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "2"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "14.0"
+    )
+    target_compile_definitions(eZeus PRIVATE EZEUS_IOS=1)
+    target_link_libraries(eZeus PRIVATE
+        "-framework UIKit"
+        "-framework Foundation"
+        "-framework AVFoundation"
+        "-framework AudioToolbox"
+        "-framework CoreAudio"
+        "-framework CoreGraphics"
+        "-framework CoreMotion"
+        "-framework CoreHaptics"
+        "-framework GameController"
+        "-framework Metal"
+        "-framework QuartzCore"
+        "-framework OpenGLES"
+    )
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS eZeus
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -3370,6 +3449,9 @@ if(LINUX)
     target_link_libraries(eZeus PRIVATE ${NOISE_LIBRARY})
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND TARGET SDL2main)
+    target_link_libraries(eZeus PRIVATE SDL2main)
+endif()
 target_link_libraries(eZeus PRIVATE SDL2::SDL2)
 target_link_libraries(eZeus PRIVATE SDL2_ttf::SDL2_ttf)
 target_link_libraries(eZeus PRIVATE SDL2_image::SDL2_image)

@@ -63,6 +63,10 @@ bool eMiniMap::mouseMoveEvent(const eMouseEvent& e) {
 //    mMouseX = e.x();
 //    mMouseY = e.y();
 
+#ifdef __IPHONEOS__
+    mMouseX = e.x();
+    mMouseY = e.y();
+#else
     {
         int cx;
         int cy;
@@ -70,6 +74,7 @@ bool eMiniMap::mouseMoveEvent(const eMouseEvent& e) {
         const auto w = window()->window();
         SDL_WarpMouseInWindow(w, cx - dx, cy - dy);
     }
+#endif
 
     if(mChangeAction) mChangeAction();
 

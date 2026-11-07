@@ -16,6 +16,12 @@ void eLineEdit::setRenderBg(const bool r) {
     mRenderBg = r;
 }
 
+bool eLineEdit::mousePressEvent(const eMouseEvent& e) {
+    (void)e;
+    SDL_StartTextInput();
+    return false;
+}
+
 bool eLineEdit::mouseMoveEvent(const eMouseEvent& e) {
     (void)e;
     return true;

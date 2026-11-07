@@ -83,6 +83,9 @@ public:
     const std::string& leader() const { return mLeader; }
     void setLeader(const std::string& leader) { mLeader = leader; }
     std::string leaderSaveDir() const;
+
+    // ratio between SDL "window" units (mouse) and render pixels
+    double mouseScale() const { return mMouseScale; }
 private:
     void clearWidgets();
 
@@ -96,6 +99,7 @@ private:
 
     std::vector<eSlot> mSlots;
 
+    double mMouseScale = 1.;
     int mShiftPressed = 0;
     int mCtrlPressed = 0;
 

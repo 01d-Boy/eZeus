@@ -19,6 +19,7 @@
 #include "fileIO/ereadstream.h"
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -26,6 +27,7 @@
 #include "elanguage.h"
 
 #include "evectorhelpers.h"
+#include "etouchcontroller.h"
 
 #include "widgets/eeventbackground.h"
 #include "widgets/eepisodeintroductionwidget.h"
@@ -40,14 +42,22 @@ eMainWindow::~eMainWindow() {
     setWidget(nullptr);
 }
 
-bool eMainWindow::initialize(const eSettings& settings) {
+bool eMainWindow::initialize(const eSettings& settingsIn) {
+    eSettings settings = settingsIn;
     const auto& res = settings.fRes;
     const int w = res.width();
     const int h = res.height();
+#ifdef __IPHONEOS__
+    const Uint32 windowFlags = SDL_WINDOW_SHOWN |
+                               SDL_WINDOW_FULLSCREEN |
+                               SDL_WINDOW_ALLOW_HIGHDPI;
+#else
+    const Uint32 windowFlags = SDL_WINDOW_SHOWN;
+#endif
     const auto window = SDL_CreateWindow("eZeus",
                                          SDL_WINDOWPOS_UNDEFINED,
                                          SDL_WINDOWPOS_UNDEFINED,
-                                         w, h, SDL_WINDOW_SHOWN);
+                                         w, h, windowFlags);
 
     if(!window) {
         printf("Window could not be created! SDL Error: %s\n",
@@ -68,14 +78,36 @@ bool eMainWindow::initialize(const eSettings& settings) {
     if(mSdlRenderer) SDL_DestroyRenderer(mSdlRenderer);
     mSdlWindow = window;
     mSdlRenderer = renderer;
+#ifdef __IPHONEOS__
+    {
+        // use the real screen resolution (in pixels)
+        int ow = 0;
+        int oh = 0;
+        SDL_GetRendererOutputSize(renderer, &ow, &oh);
+        int ww = 0;
+        int wh = 0;
+        SDL_GetWindowSize(window, &ww, &wh);
+        if(ow > 0 && oh > 0) {
+            settings.fRes = eResolution(ow, oh);
+            if(ww > 0) mMouseScale = double(ow)/ww;
+        }
+        settings.fFullscreen = false;
+        mSettings = settings;
+        mFirstFullscrenSetting = false;
+        mFirstResolutionSetting = false;
+    }
+#else
     setResolution(res);
     setFullscreen(settings.fFullscreen);
     mSettings = settings;
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+#endif
 
+#ifndef __IPHONEOS__
     const std::string icoPath = eGameDir::path("zeus.ico");
     const auto icon = IMG_Load(icoPath.c_str());
     SDL_SetWindowIcon(window, icon);
+#endif
     eGameTextures::setSettings(mSettings);
     return true;
 }
@@ -564,6 +596,31 @@ int eMainWindow::exec() {
     SDL_Event e;
     eTooltip tooltip(*this);
 
+    // touch -> mouse translation (used on touch screens, e.g. iPad)
+#ifdef __IPHONEOS__
+    bool mouseUsed = false;
+#else
+    bool mouseUsed = true;
+#endif
+    eTouchController::Sink touchSink;
+    touchSink.fMove = [this](const eMouseEvent& me) {
+        if(mWidget) mWidget->mouseMove(me);
+    };
+    touchSink.fPress = [this](const eMouseEvent& me) {
+        if(mWidget) mWidget->mousePress(me);
+    };
+    touchSink.fRelease = [this](const eMouseEvent& me) {
+        if(mWidget) mWidget->mouseRelease(me);
+    };
+    touchSink.fWheel = [this](const eMouseWheelEvent& me) {
+        if(mWidget) mWidget->mouseWheel(me);
+    };
+    touchSink.fPanMode = [this]() {
+        return mWidget && (mWidget == mGW || mWidget == mWW);
+    };
+    eTouchController touch(touchSink);
+    touch.setScreenSize(width(), height());
+
     const bool showFPS = false;
     const double fpsClamp = 20;
 
@@ -576,6 +633,8 @@ int eMainWindow::exec() {
         while(SDL_PollEvent(&e)) {
             int x, y;
             SDL_GetMouseState(&x, &y);
+            x = std::lround(x*mMouseScale);
+            y = std::lround(y*mMouseScale);
             const bool shift = mShiftPressed > 0;
             const bool ctrl = mCtrlPressed > 0;
             if(e.type == SDL_QUIT) {
@@ -595,7 +654,31 @@ int eMainWindow::exec() {
             } else if(e.type == SDL_RENDER_TARGETS_RESET ||
                       e.type == SDL_RENDER_DEVICE_RESET) {
                 resetRenderTargets = true;
+            } else if(touch.handleEvent(e)) {
+                continue;
+            } else if(e.type == SDL_TEXTINPUT) {
+                // on-screen keyboard: feed characters as key presses
+                for(const char* c = e.text.text; *c; c++) {
+                    SDL_Scancode sc = SDL_SCANCODE_UNKNOWN;
+                    bool upper = false;
+                    if(*c >= 'a' && *c <= 'z') {
+                        sc = static_cast<SDL_Scancode>(SDL_SCANCODE_A + (*c - 'a'));
+                    } else if(*c >= 'A' && *c <= 'Z') {
+                        sc = static_cast<SDL_Scancode>(SDL_SCANCODE_A + (*c - 'A'));
+                        upper = true;
+                    } else if(*c >= '1' && *c <= '9') {
+                        sc = static_cast<SDL_Scancode>(SDL_SCANCODE_1 + (*c - '1'));
+                    } else if(*c == '0') {
+                        sc = SDL_SCANCODE_0;
+                    } else if(*c == ' ') {
+                        sc = SDL_SCANCODE_SPACE;
+                    }
+                    if(sc == SDL_SCANCODE_UNKNOWN) continue;
+                    const eKeyPressEvent ke(x, y, upper, ctrl, buttons, sc);
+                    if(mWidget) mWidget->keyPress(ke);
+                }
             } else if(e.type == SDL_MOUSEMOTION) {
+                mouseUsed = true;
                 const eMouseEvent me(x, y, shift, ctrl, buttons, button);
                 if(mWidget) mWidget->mouseMove(me);
             } else if(e.type == SDL_MOUSEBUTTONDOWN) {
@@ -636,6 +719,7 @@ int eMainWindow::exec() {
                 if(mWidget) mWidget->mouseWheel(me);
             } else if(e.type == SDL_KEYDOWN) {
                 const auto k = e.key.keysym.scancode;
+                if(k == SDL_SCANCODE_RETURN) SDL_StopTextInput();
                 if(k == SDL_Scancode::SDL_SCANCODE_LSHIFT ||
                    k == SDL_Scancode::SDL_SCANCODE_RSHIFT) {
                     mShiftPressed++;
@@ -657,6 +741,8 @@ int eMainWindow::exec() {
             }
         }
 
+        touch.update();
+
         if(resetRenderTargets) {
             resetRenderTargets = false;
             if(mWidget) mWidget->renderTargetsReset();
@@ -677,7 +763,14 @@ int eMainWindow::exec() {
                 const int wtt = tooltip.width();
                 const int htt = tooltip.height();
                 int mx, my;
-                SDL_GetMouseState(&mx, &my);
+                if(mouseUsed) {
+                    SDL_GetMouseState(&mx, &my);
+                    mx = std::lround(mx*mMouseScale);
+                    my = std::lround(my*mMouseScale);
+                } else {
+                    mx = touch.cursorX();
+                    my = touch.cursorY();
+                }
                 int xtt;
                 int ytt;
                 if(mx > width()/2) {

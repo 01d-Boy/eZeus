@@ -2,6 +2,11 @@
 
 #include <SDL2/SDL_filesystem.h>
 #include <fstream>
+#include <filesystem>
+
+#ifdef __IPHONEOS__
+#include "ios/eiosplatform.h"
+#endif
 
 std::string eGameDir::sPath;
 
@@ -49,9 +54,23 @@ std::string eGameDir::i60BinaryPath() {
 }
 
 std::string eGameDir::exeDir() {
+#ifdef __IPHONEOS__
+    // Layout on the iPad (Files app -> On My iPad -> eZeus):
+    //   Zeus/                  original game files (Zeus + Poseidon)
+    //   Zeus/eZeus/            eZeus data (interface.e, i15.e, Zeus_Text.xml...)
+    //   Zeus/eZeus/Bin/        empty folder, created automatically
+    static const std::string dir = []() {
+        std::string d = eIosDocumentsDir() + "Zeus/eZeus/Bin/";
+        std::error_code ec;
+        std::filesystem::create_directories(d, ec);
+        return d;
+    }();
+    return dir;
+#else
     const auto d = SDL_GetBasePath();
     const std::string str(d);
     return str;
+#endif
 }
 
 std::string eGameDir::adventuresDir() {

@@ -1,4 +1,6 @@
+#ifndef __IPHONEOS__
 #define SDL_MAIN_HANDLED
+#endif
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
@@ -99,7 +101,16 @@ bool getDisplayResolutions(std::vector<SDL_DisplayMode>& resolutions) {
     return true;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+#ifdef __IPHONEOS__
+    // we translate touches ourselves (see etouchcontroller.h)
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    SDL_SetHint(SDL_HINT_IOS_HIDE_HOME_INDICATOR, "2");
+#endif
     if(!init()) {
         printf("Failed to initialize!\n");
         close();
