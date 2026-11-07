@@ -37,6 +37,12 @@ jobs:
             -jobs 4 > build.log 2>&1
           rc=$?
           grep -E "error:|\*\* BUILD" build.log | sort -u | head -80
+          if [ $rc -ne 0 ]; then
+            echo "=== linker details ==="
+            grep -nE "^ld:|Undefined symbols|duplicate symbol|referenced from|library .* not found|framework .* not found|warning: .*ignoring" build.log | head -60
+            echo "=== tail ==="
+            tail -40 build.log | cut -c1-400
+          fi
           if [ $rc -ne 0 ]; then exit $rc; fi
           test -f build/Release-iphoneos/eZeus.app/eZeus
 
